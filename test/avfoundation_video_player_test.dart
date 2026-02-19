@@ -555,8 +555,7 @@ void main() {
       const headers = <String, String>{'Authorization': 'Bearer token'};
       await player.replaceCurrentItem(
         1,
-        uri: uri,
-        httpHeaders: headers,
+        DataSource(sourceType: DataSourceType.network, uri: uri, httpHeaders: headers),
       );
 
       final VerificationResult verification = verify(
@@ -576,7 +575,7 @@ void main() {
         playerId: 1,
       );
       const uri = 'https://example.com/another.mp4';
-      await player.replaceCurrentItem(1, uri: uri);
+      await player.replaceCurrentItem(1, DataSource(sourceType: DataSourceType.network, uri: uri));
 
       final VerificationResult verification = verify(
         playerApi.replaceCurrentItem(captureAny),
