@@ -121,9 +121,9 @@ class AVFoundationVideoPlayer extends VideoPlayerPlatform {
   /// optional [httpHeaders], without disposing and recreating the player.
   ///
   /// This allows swapping video sources on an existing player instance.
-  Future<void> replaceCurrentItem(int playerId, DataSource dataSource) async {
+  Future<void> replace(int playerId, DataSource dataSource) async {
     final pigeonCreationOptions = await _prepareCreationOptions(dataSource);
-    return _playerWith(id: playerId).replaceCurrentItem(pigeonCreationOptions);
+    return _playerWith(id: playerId).replace(pigeonCreationOptions);
   }
 
   /// Returns the API instance for [playerId], creating it if it doesn't already
@@ -276,7 +276,7 @@ class _PlayerInstance {
       StreamController<VideoEvent>.broadcast();
   StreamSubscription<dynamic>? _eventSubscription;
 
-  Future<void> replaceCurrentItem(CreationOptions options) =>
+  Future<void> replace(CreationOptions options) =>
       _api.replaceCurrentItem(options);
 
   Future<void> play() => _api.play();
