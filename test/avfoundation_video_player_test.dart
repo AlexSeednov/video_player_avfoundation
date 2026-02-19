@@ -543,6 +543,49 @@ void main() {
       expect(position, const Duration(milliseconds: positionMilliseconds));
     });
 
+    test('replaceCurrentItem', () async {
+      final (
+        AVFoundationVideoPlayer player,
+        _,
+        MockVideoPlayerInstanceApi playerApi,
+      ) = setUpMockPlayer(
+        playerId: 1,
+      );
+      const uri = 'https://example.com/new_video.mp4';
+      const headers = <String, String>{'Authorization': 'Bearer token'};
+      await player.replaceCurrentItem(
+        1,
+        uri: uri,
+        httpHeaders: headers,
+      );
+
+      final VerificationResult verification = verify(
+        playerApi.replaceCurrentItem(captureAny),
+      );
+      final options = verification.captured[0] as CreationOptions;
+      expect(options.uri, uri);
+      expect(options.httpHeaders, headers);
+    });
+
+    test('replaceCurrentItem with default empty headers', () async {
+      final (
+        AVFoundationVideoPlayer player,
+        _,
+        MockVideoPlayerInstanceApi playerApi,
+      ) = setUpMockPlayer(
+        playerId: 1,
+      );
+      const uri = 'https://example.com/another.mp4';
+      await player.replaceCurrentItem(1, uri: uri);
+
+      final VerificationResult verification = verify(
+        playerApi.replaceCurrentItem(captureAny),
+      );
+      final options = verification.captured[0] as CreationOptions;
+      expect(options.uri, uri);
+      expect(options.httpHeaders, <String, String>{});
+    });
+
     test('videoEventsFor', () async {
       const playerId = 1;
       final (

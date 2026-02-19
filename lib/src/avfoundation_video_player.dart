@@ -114,6 +114,23 @@ class AVFoundationVideoPlayer extends VideoPlayerPlatform {
 
     return playerId;
   }
+  
+
+  // TODO(Alex): добавить в VideoPlayerPlatform
+  /// Replaces the current video content with a new one specified by [uri] and
+  /// optional [httpHeaders], without disposing and recreating the player.
+  ///
+  /// This allows swapping video sources on an existing player instance.
+  Future<void> replaceCurrentItem(
+    int playerId, {
+    required String uri,
+    Map<String, String> httpHeaders = const <String, String>{},
+  }) {
+    return _playerWith(id: playerId).replaceCurrentItem(
+      uri: uri,
+      httpHeaders: httpHeaders,
+    );
+  }
 
   /// Returns the API instance for [playerId], creating it if it doesn't already
   /// exist.
@@ -264,6 +281,13 @@ class _PlayerInstance {
   final StreamController<VideoEvent> _eventStreamController =
       StreamController<VideoEvent>.broadcast();
   StreamSubscription<dynamic>? _eventSubscription;
+
+  Future<void> replaceCurrentItem({
+    required String uri,
+    Map<String, String> httpHeaders = const <String, String>{},
+  }) => _api.replaceCurrentItem(
+    CreationOptions(uri: uri, httpHeaders: httpHeaders),
+  );
 
   Future<void> play() => _api.play();
 

@@ -93,4 +93,6 @@ abstract class VideoPlayerInstanceApi {
   List<MediaSelectionAudioTrackData> getAudioTracks();
   @ObjCSelector('selectAudioTrackAtIndex:')
   void selectAudioTrack(int trackIndex);
+  @ObjCSelector('replaceCurrentItemWithOptions:')
+  void replaceCurrentItem(CreationOptions options);
 }

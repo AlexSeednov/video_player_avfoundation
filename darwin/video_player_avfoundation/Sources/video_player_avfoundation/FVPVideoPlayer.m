@@ -135,6 +135,7 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
     }
   };
 
+  _avFactory = avFactory;
   _player = [avFactory playerWithPlayerItem:item];
   _player.actionAtItemEnd = AVPlayerActionAtItemEndNone;
 
@@ -491,6 +492,90 @@ NS_INLINE CGFloat radiansToDegrees(CGFloat radians) {
   }
 
   return mediaSelectionTracks;
+}
+
+- (void)replaceCurrentItemWithOptions:(FVPCreationOptions *)options
+                                error:(FlutterError *_Nullable *_Nonnull)error {
+  AVPlayerItem *oldItem = _player.currentItem;
+
+  // Remove observers from the old item.
+  if (_listenersRegistered && oldItem) {
+    [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                    name:AVPlayerItemDidPlayToEndTimeNotification
+                                                  object:oldItem];
+    FVPRemoveKeyValueObservers(self, FVPGetPlayerItemObservations(), oldItem);
+  }
+
+  // Reset initialization state so a new 'initialized' event will be sent.
+  _isInitialized = NO;
+
+  // Create the new player item from the given options.
+  NSDictionary<NSString *, NSString *> *headers = options.httpHeaders;
+  NSDictionary<NSString *, id> *itemOptions =
+      headers.count == 0 ? nil : @{@"AVURLAssetHTTPHeaderFieldsKey" : headers};
+  NSObject<FVPAVAsset> *asset = [_avFactory URLAssetWithURL:[NSURL URLWithString:options.uri]
+                                                    options:itemOptions];
+  NSObject<FVPAVPlayerItem> *newItem = [_avFactory playerItemWithAsset:asset];
+
+  // Replace the current item.
+  [_player replaceCurrentItemWithPlayerItem:(AVPlayerItem *)newItem];
+
+  // Re-register observers on the new item if listeners were previously set up.
+  if (_listenersRegistered) {
+    FVPRegisterKeyValueObservers(self, FVPGetPlayerItemObservations(), _player.currentItem);
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(itemDidPlayToEndTime:)
+                                                 name:AVPlayerItemDidPlayToEndTimeNotification
+                                               object:_player.currentItem];
+  }
+
+  // Load tracks asynchronously for the new asset (same as in init).
+  void (^assetCompletionHandler)(void) = ^{
+    if ([asset statusOfValueForKey:@"tracks" error:nil] == AVKeyValueStatusLoaded) {
+      void (^processVideoTracks)(NSArray<AVAssetTrack *> *) = ^(NSArray<AVAssetTrack *> *tracks) {
+        if ([tracks count] > 0) {
+          AVAssetTrack *videoTrack = tracks[0];
+          void (^trackCompletionHandler)(void) = ^{
+            if (self->_disposed) return;
+            if ([videoTrack statusOfValueForKey:@"preferredTransform"
+                                          error:nil] == AVKeyValueStatusLoaded) {
+              self->_preferredTransform = FVPGetStandardizedTrackTransform(
+                  videoTrack.preferredTransform, videoTrack.naturalSize);
+              if (CGAffineTransformIsIdentity(self->_preferredTransform)) {
+                return;
+              }
+              AVMutableVideoComposition *videoComposition =
+                  [self videoCompositionWithTransform:self->_preferredTransform
+                                                asset:asset
+                                           videoTrack:videoTrack];
+              newItem.videoComposition = videoComposition;
+            }
+          };
+          [videoTrack loadValuesAsynchronouslyForKeys:@[ @"preferredTransform" ]
+                                    completionHandler:trackCompletionHandler];
+        }
+      };
+
+      if (@available(iOS 15.0, macOS 12.0, *)) {
+        [asset loadTracksWithMediaType:AVMediaTypeVideo
+                     completionHandler:^(NSArray<AVAssetTrack *> *_Nullable tracks,
+                                         NSError *_Nullable loadError) {
+                       if (loadError == nil && tracks != nil) {
+                         processVideoTracks(tracks);
+                       } else if (loadError != nil) {
+                         NSLog(@"Error loading tracks: %@", loadError);
+                       }
+                     }];
+      } else {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+        NSArray *tracks = [asset tracksWithMediaType:AVMediaTypeVideo];
+#pragma clang diagnostic pop
+        processVideoTracks(tracks);
+      }
+    }
+  };
+  [asset loadValuesAsynchronouslyForKeys:@[ @"tracks" ] completionHandler:assetCompletionHandler];
 }
 
 - (void)selectAudioTrackAtIndex:(NSInteger)trackIndex
