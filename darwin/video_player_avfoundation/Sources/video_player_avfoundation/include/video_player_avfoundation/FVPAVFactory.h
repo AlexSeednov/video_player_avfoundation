@@ -57,6 +57,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Protocol for abstracting access to an AVPlayerItem, to enable unit testing.
 @protocol FVPAVPlayerItem <NSObject>
 @required
+/// The underlying AVPlayerItem instance.
+///
+/// This can't be fully abstracted away because it's passed to AVPlayer's
+/// replaceCurrentItemWithPlayerItem: and other AVFoundation calls.
+@property(nonatomic, readonly) AVPlayerItem *playerItem;
+
 /// Wraps the underlying playerItem's asset property.
 @property(nonatomic, readonly) NSObject<FVPAVAsset> *asset;
 

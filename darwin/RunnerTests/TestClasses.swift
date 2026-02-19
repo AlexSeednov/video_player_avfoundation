@@ -72,9 +72,12 @@ final class TestAsset: NSObject, FVPAVAsset {
 final class StubPlayerItem: NSObject, FVPAVPlayerItem {
   let asset: FVPAVAsset
   var videoComposition: AVVideoComposition?
+  let playerItem: AVPlayerItem
 
   init(asset: FVPAVAsset = TestAsset()) {
     self.asset = asset
+    // Create a minimal AVPlayerItem for protocol conformance.
+    self.playerItem = AVPlayerItem(url: URL(string: "about:blank")!)
     super.init()
   }
 }

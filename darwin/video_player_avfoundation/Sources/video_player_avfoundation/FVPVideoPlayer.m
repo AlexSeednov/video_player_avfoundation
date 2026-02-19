@@ -518,7 +518,7 @@ NS_INLINE CGFloat radiansToDegrees(CGFloat radians) {
   NSObject<FVPAVPlayerItem> *newItem = [_avFactory playerItemWithAsset:asset];
 
   // Replace the current item.
-  [_player replaceCurrentItemWithPlayerItem:(AVPlayerItem *)newItem];
+  [_player replaceCurrentItemWithPlayerItem:newItem.playerItem];
 
   // Re-register observers on the new item if listeners were previously set up.
   if (_listenersRegistered) {
