@@ -49,23 +49,7 @@ class AVFoundationVideoPlayer extends VideoPlayerPlatform {
     await player?.dispose();
   }
 
-  @override
-  Future<int?> create(DataSource dataSource) async {
-    return createWithOptions(
-      VideoCreationOptions(
-        dataSource: dataSource,
-        // Texture view was the only supported view type before
-        // createWithOptions was introduced.
-        viewType: VideoViewType.textureView,
-      ),
-    );
-  }
-
-  @override
-  Future<int?> createWithOptions(VideoCreationOptions options) async {
-    final DataSource dataSource = options.dataSource;
-    final VideoViewType viewType = options.viewType;
-
+  Future<CreationOptions> _prepareCreationOptions(DataSource dataSource) async {
     String? uri;
     switch (dataSource.sourceType) {
       case DataSourceType.asset:
@@ -90,16 +74,32 @@ class AVFoundationVideoPlayer extends VideoPlayerPlatform {
         uri = dataSource.uri;
     }
     if (uri == null) {
-      throw ArgumentError('Unable to construct a video asset from $options');
+      throw ArgumentError('Unable to construct a video asset from $dataSource');
     }
-    final pigeonCreationOptions = CreationOptions(
-      uri: uri,
-      httpHeaders: dataSource.httpHeaders,
+    return CreationOptions(uri: uri, httpHeaders: dataSource.httpHeaders);
+  }
+
+  @override
+  Future<int?> create(DataSource dataSource) async {
+    return createWithOptions(
+      VideoCreationOptions(
+        dataSource: dataSource,
+        // Texture view was the only supported view type before
+        // createWithOptions was introduced.
+        viewType: VideoViewType.textureView,
+      ),
+    );
+  }
+
+  @override
+  Future<int?> createWithOptions(VideoCreationOptions options) async {
+    final pigeonCreationOptions = await _prepareCreationOptions(
+      options.dataSource,
     );
 
     final int playerId;
     final VideoPlayerViewState state;
-    switch (viewType) {
+    switch (options.viewType) {
       case VideoViewType.textureView:
         final TexturePlayerIds ids = await _api.createForTextureView(
           pigeonCreationOptions,
@@ -113,6 +113,17 @@ class AVFoundationVideoPlayer extends VideoPlayerPlatform {
     ensurePlayerInitialized(playerId, state);
 
     return playerId;
+  }
+
+
+  // TODO(Alex): добавить в VideoPlayerPlatform
+  /// Replaces the current video content with a new one specified by [uri] and
+  /// optional [httpHeaders], without disposing and recreating the player.
+  ///
+  /// This allows swapping video sources on an existing player instance.
+  Future<void> replace(int playerId, DataSource dataSource) async {
+    final pigeonCreationOptions = await _prepareCreationOptions(dataSource);
+    return _playerWith(id: playerId).replace(pigeonCreationOptions);
   }
 
   /// Returns the API instance for [playerId], creating it if it doesn't already
@@ -264,6 +275,24 @@ class _PlayerInstance {
   final StreamController<VideoEvent> _eventStreamController =
       StreamController<VideoEvent>.broadcast();
   StreamSubscription<dynamic>? _eventSubscription;
+
+  Future<void> replace(CreationOptions options) async {
+    // Ensure the event stream is active before replacing, so we don't miss
+    // the initialized event from the new item.
+    final Future<VideoEvent> ready = videoEvents.firstWhere(
+      (VideoEvent event) =>
+          event.eventType == VideoEventType.initialized ||
+          event.eventType == VideoEventType.unknown,
+    );
+    await _api.replaceCurrentItem(options);
+    final VideoEvent event = await ready;
+    if (event.eventType == VideoEventType.unknown) {
+      throw PlatformException(
+        code: 'video_player',
+        message: 'Failed to load the new video source.',
+      );
+    }
+  }
 
   Future<void> play() => _api.play();
 

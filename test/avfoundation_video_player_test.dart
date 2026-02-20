@@ -543,6 +543,126 @@ void main() {
       expect(position, const Duration(milliseconds: positionMilliseconds));
     });
 
+    test('replaceCurrentItem waits for initialized event', () async {
+      const playerId = 1;
+      final (
+        AVFoundationVideoPlayer player,
+        _,
+        MockVideoPlayerInstanceApi playerApi,
+      ) = setUpMockPlayer(
+        playerId: playerId,
+      );
+      const mockChannel = 'flutter.dev/videoPlayer/videoEvents$playerId';
+
+      // Set up the event channel to send an 'initialized' event on listen.
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMessageHandler(mockChannel, (ByteData? message) async {
+            final MethodCall methodCall =
+                const StandardMethodCodec().decodeMethodCall(message);
+            if (methodCall.method == 'listen') {
+              // Schedule the initialized event to be sent asynchronously.
+              Future<void>.delayed(Duration.zero).then((_) async {
+                await TestDefaultBinaryMessengerBinding
+                    .instance
+                    .defaultBinaryMessenger
+                    .handlePlatformMessage(
+                      mockChannel,
+                      const StandardMethodCodec()
+                          .encodeSuccessEnvelope(<String, dynamic>{
+                            'event': 'initialized',
+                            'duration': 5000,
+                            'width': 1280,
+                            'height': 720,
+                          }),
+                      (ByteData? data) {},
+                    );
+              });
+              return const StandardMethodCodec().encodeSuccessEnvelope(null);
+            } else if (methodCall.method == 'cancel') {
+              return const StandardMethodCodec().encodeSuccessEnvelope(null);
+            } else {
+              fail('Expected listen or cancel');
+            }
+          });
+
+      // Activate the event stream before calling replace.
+      player.videoEventsFor(playerId);
+
+      const uri = 'https://example.com/new_video.mp4';
+      const headers = <String, String>{'Authorization': 'Bearer token'};
+      await player.replace(
+        playerId,
+        DataSource(
+          sourceType: DataSourceType.network,
+          uri: uri,
+          httpHeaders: headers,
+        ),
+      );
+
+      final VerificationResult verification = verify(
+        playerApi.replaceCurrentItem(captureAny),
+      );
+      final options = verification.captured[0] as CreationOptions;
+      expect(options.uri, uri);
+      expect(options.httpHeaders, headers);
+    });
+
+    test('replaceCurrentItem with default empty headers', () async {
+      const playerId = 1;
+      final (
+        AVFoundationVideoPlayer player,
+        _,
+        MockVideoPlayerInstanceApi playerApi,
+      ) = setUpMockPlayer(
+        playerId: playerId,
+      );
+      const mockChannel = 'flutter.dev/videoPlayer/videoEvents$playerId';
+
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMessageHandler(mockChannel, (ByteData? message) async {
+            final MethodCall methodCall =
+                const StandardMethodCodec().decodeMethodCall(message);
+            if (methodCall.method == 'listen') {
+              Future<void>.delayed(Duration.zero).then((_) async {
+                await TestDefaultBinaryMessengerBinding
+                    .instance
+                    .defaultBinaryMessenger
+                    .handlePlatformMessage(
+                      mockChannel,
+                      const StandardMethodCodec()
+                          .encodeSuccessEnvelope(<String, dynamic>{
+                            'event': 'initialized',
+                            'duration': 3000,
+                            'width': 640,
+                            'height': 480,
+                          }),
+                      (ByteData? data) {},
+                    );
+              });
+              return const StandardMethodCodec().encodeSuccessEnvelope(null);
+            } else if (methodCall.method == 'cancel') {
+              return const StandardMethodCodec().encodeSuccessEnvelope(null);
+            } else {
+              fail('Expected listen or cancel');
+            }
+          });
+
+      player.videoEventsFor(playerId);
+
+      const uri = 'https://example.com/another.mp4';
+      await player.replace(
+        playerId,
+        DataSource(sourceType: DataSourceType.network, uri: uri),
+      );
+
+      final VerificationResult verification = verify(
+        playerApi.replaceCurrentItem(captureAny),
+      );
+      final options = verification.captured[0] as CreationOptions;
+      expect(options.uri, uri);
+      expect(options.httpHeaders, <String, String>{});
+    });
+
     test('videoEventsFor', () async {
       const playerId = 1;
       final (
