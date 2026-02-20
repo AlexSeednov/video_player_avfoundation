@@ -276,8 +276,23 @@ class _PlayerInstance {
       StreamController<VideoEvent>.broadcast();
   StreamSubscription<dynamic>? _eventSubscription;
 
-  Future<void> replace(CreationOptions options) =>
-      _api.replaceCurrentItem(options);
+  Future<void> replace(CreationOptions options) async {
+    // Ensure the event stream is active before replacing, so we don't miss
+    // the initialized event from the new item.
+    final Future<VideoEvent> ready = videoEvents.firstWhere(
+      (VideoEvent event) =>
+          event.eventType == VideoEventType.initialized ||
+          event.eventType == VideoEventType.unknown,
+    );
+    await _api.replaceCurrentItem(options);
+    final VideoEvent event = await ready;
+    if (event.eventType == VideoEventType.unknown) {
+      throw PlatformException(
+        code: 'video_player',
+        message: 'Failed to load the new video source.',
+      );
+    }
+  }
 
   Future<void> play() => _api.play();
 
