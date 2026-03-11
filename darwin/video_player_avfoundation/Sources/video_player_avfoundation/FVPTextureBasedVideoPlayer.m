@@ -28,6 +28,12 @@
 // (e.g., after a seek while paused). If YES, the display link should continue to run until the next
 // frame is successfully provided.
 @property(nonatomic, assign) BOOL waitingForFrame;
+// Token for the periodic time observer on AVPlayer, used to detect external seeks
+// (e.g. from iOS PiP skip controls).
+@property(nonatomic) id timeObserverToken;
+// The last position (in milliseconds) reported to the Dart side via the time observer.
+// Used to detect position jumps that indicate an external seek.
+@property(nonatomic) int64_t lastReportedPositionMs;
 
 /// Ensures that the frame updater runs until a frame is rendered, regardless of play/pause state.
 - (void)expectFrame;
@@ -60,6 +66,20 @@
     CALayer *flutterLayer = viewProvider.view.layer;
 #endif
     [flutterLayer addSublayer:self.playerLayer];
+
+    // Use a periodic time observer to detect external position changes
+    // (e.g. from iOS PiP skip forward/backward controls). The observer fires
+    // both during playback and on discontinuous time jumps (seeks), making it
+    // more reliable than AVPlayerItemTimeJumpedNotification which may not fire
+    // for external seeks while paused on some iOS versions.
+    _lastReportedPositionMs = -1;
+    __weak typeof(self) weakSelf = self;
+    _timeObserverToken = [self.player
+        addPeriodicTimeObserverForInterval:CMTimeMake(1, 10)  // 100ms
+                                     queue:dispatch_get_main_queue()
+                                usingBlock:^(CMTime time) {
+                                  [weakSelf handleTimeObserverUpdate:time];
+                                }];
   }
   return self;
 }
@@ -92,6 +112,9 @@
 }
 
 - (void)seekTo:(NSInteger)position completion:(void (^)(FlutterError *_Nullable))completion {
+  // Update last reported position so the time observer won't treat this
+  // Dart-initiated seek as an external position change.
+  self.lastReportedPositionMs = position;
   CMTime previousCMTime = self.player.currentTime;
   [super seekTo:position
       completion:^(FlutterError *error) {
@@ -111,7 +134,40 @@
       }];
 }
 
+/// Called by the periodic time observer. Detects discontinuous position changes
+/// (external seeks, e.g. from iOS PiP controls) and notifies the Dart side.
+- (void)handleTimeObserverUpdate:(CMTime)time {
+  if (CMTIME_IS_INDEFINITE(time) || !CMTIME_IS_VALID(time)) {
+    return;
+  }
+  int64_t currentMs = time.value * 1000 / time.timescale;
+  int64_t lastMs = self.lastReportedPositionMs;
+  self.lastReportedPositionMs = currentMs;
+
+  if (lastMs < 0) {
+    // First observation, nothing to compare.
+    return;
+  }
+
+  // Detect a discontinuous jump: position changed significantly while paused,
+  // or jumped by more than expected during playback.
+  int64_t delta = llabs(currentMs - lastMs);
+  if (!self.isPlaying && delta > 0) {
+    // Any position change while paused means an external seek occurred.
+    [self expectFrame];
+    [self.eventListener videoPlayerDidSetPlaying:self.isPlaying];
+  } else if (self.isPlaying && delta > 1000) {
+    // During playback, a jump of >1s indicates an external seek.
+    [self expectFrame];
+    [self.eventListener videoPlayerDidSetPlaying:self.isPlaying];
+  }
+}
+
 - (void)disposeWithError:(FlutterError *_Nullable *_Nonnull)error {
+  if (_timeObserverToken) {
+    [self.player removeTimeObserver:_timeObserverToken];
+    _timeObserverToken = nil;
+  }
   [super disposeWithError:error];
 
   [self.playerLayer removeFromSuperlayer];

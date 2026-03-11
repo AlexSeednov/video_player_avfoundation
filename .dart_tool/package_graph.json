@@ -5,7 +5,7 @@
   "packages": [
     {
       "name": "video_player_avfoundation",
-      "version": "2.9.3",
+      "version": "2.9.3+1",
       "dependencies": [
         "flutter",
         "video_player_platform_interface"
