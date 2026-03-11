@@ -295,7 +295,15 @@ NS_INLINE CGFloat radiansToDegrees(CGFloat radians) {
     // Important: Make sure to cast the object to AVPlayer when observing the rate property,
     // as it is not available in AVPlayerItem.
     AVPlayer *player = (AVPlayer *)object;
-    [self.eventListener videoPlayerDidSetPlaying:(player.rate > 0)];
+    BOOL isNowPlaying = player.rate > 0;
+    [self.eventListener videoPlayerDidSetPlaying:isNowPlaying];
+    // Sync internal playing state with the actual player rate.
+    // This handles cases where playback is started/stopped externally
+    // (e.g., from iOS PiP controls) without going through play/pause API.
+    if (_isPlaying != isNowPlaying) {
+      _isPlaying = isNowPlaying;
+      [self updatePlayingState];
+    }
   }
 }
 
