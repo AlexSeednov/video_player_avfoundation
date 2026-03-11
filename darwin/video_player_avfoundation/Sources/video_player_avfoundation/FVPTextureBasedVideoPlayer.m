@@ -119,9 +119,14 @@
 }
 
 - (void)playerItemDidJumpTime:(NSNotification *)notification {
-  // An external seek occurred (e.g. from iOS PiP skip forward/backward controls).
+  // A time jump occurred (e.g. from iOS PiP skip forward/backward controls).
   // Ensure the display link runs to deliver the new frame to the Flutter texture.
   [self expectFrame];
+  // Notify the Dart side so it can update the position and notify listeners.
+  // For Dart-initiated seeks this is harmless (position is already known).
+  // For external seeks (PiP controls) this is essential since no other
+  // mechanism informs Dart about the position change.
+  [self.eventListener videoPlayerDidSetPlaying:self.isPlaying];
 }
 
 - (void)disposeWithError:(FlutterError *_Nullable *_Nonnull)error {
