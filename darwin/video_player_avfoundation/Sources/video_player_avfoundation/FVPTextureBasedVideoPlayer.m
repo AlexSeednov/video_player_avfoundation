@@ -60,6 +60,13 @@
     CALayer *flutterLayer = viewProvider.view.layer;
 #endif
     [flutterLayer addSublayer:self.playerLayer];
+
+    // Observe time jumps (external seeks, e.g. from iOS PiP skip controls)
+    // to ensure the Flutter texture gets the new frame.
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(playerItemDidJumpTime:)
+                                                 name:AVPlayerItemTimeJumpedNotification
+                                               object:item.playerItem];
   }
   return self;
 }
@@ -111,7 +118,16 @@
       }];
 }
 
+- (void)playerItemDidJumpTime:(NSNotification *)notification {
+  // An external seek occurred (e.g. from iOS PiP skip forward/backward controls).
+  // Ensure the display link runs to deliver the new frame to the Flutter texture.
+  [self expectFrame];
+}
+
 - (void)disposeWithError:(FlutterError *_Nullable *_Nonnull)error {
+  [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                  name:AVPlayerItemTimeJumpedNotification
+                                                object:nil];
   [super disposeWithError:error];
 
   [self.playerLayer removeFromSuperlayer];
