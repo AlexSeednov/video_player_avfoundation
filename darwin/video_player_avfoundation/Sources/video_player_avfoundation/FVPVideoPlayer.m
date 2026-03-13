@@ -300,9 +300,13 @@ NS_INLINE CGFloat radiansToDegrees(CGFloat radians) {
     // Sync internal playing state with the actual player rate.
     // This handles cases where playback is started/stopped externally
     // (e.g., from iOS PiP controls) without going through play/pause API.
+    // IMPORTANT: Do NOT call updatePlayingState here — the AVPlayer already
+    // reflects the correct rate. Calling play/pause on it again would cause
+    // redundant KVO notifications and an infinite play/pause loop when iOS
+    // rejects playback (e.g., backgrounded without PiP/audio background mode).
     if (_isPlaying != isNowPlaying) {
       _isPlaying = isNowPlaying;
-      [self updatePlayingState];
+      [self onExternalPlayingStateChanged];
     }
   }
 }
@@ -324,6 +328,11 @@ NS_INLINE CGFloat radiansToDegrees(CGFloat radians) {
       }
       break;
   }
+}
+
+- (void)onExternalPlayingStateChanged {
+  // Base implementation: no-op. Subclasses (e.g., FVPTextureBasedVideoPlayer)
+  // override this to update display link state without calling play/pause.
 }
 
 - (void)updatePlayingState {

@@ -111,6 +111,13 @@
   _displayLink.running = self.isPlaying || self.waitingForFrame;
 }
 
+- (void)onExternalPlayingStateChanged {
+  // Update display link for externally triggered play/pause (e.g., PiP controls,
+  // iOS background restrictions). Does NOT call play/pause on the AVPlayer
+  // since the player already reflects the correct state.
+  _displayLink.running = self.isPlaying || self.waitingForFrame;
+}
+
 - (void)seekTo:(NSInteger)position completion:(void (^)(FlutterError *_Nullable))completion {
   // Update last reported position so the time observer won't treat this
   // Dart-initiated seek as an external position change.
