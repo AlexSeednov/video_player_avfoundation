@@ -112,10 +112,11 @@
 }
 
 - (void)onExternalPlayingStateChanged {
-  // Update display link for externally triggered play/pause (e.g., PiP controls,
-  // iOS background restrictions). Does NOT call play/pause on the AVPlayer
-  // since the player already reflects the correct state.
-  _displayLink.running = self.isPlaying || self.waitingForFrame;
+  // Update display link based on actual player rate, not _isPlaying.
+  // _isPlaying reflects the Dart-intended state. The actual player rate
+  // may differ due to external changes (PiP controls, iOS background
+  // restrictions, transient drops during PiP restore transitions).
+  _displayLink.running = (self.player.rate > 0) || self.waitingForFrame;
 }
 
 - (void)seekTo:(NSInteger)position completion:(void (^)(FlutterError *_Nullable))completion {

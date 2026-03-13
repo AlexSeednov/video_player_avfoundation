@@ -297,17 +297,12 @@ NS_INLINE CGFloat radiansToDegrees(CGFloat radians) {
     AVPlayer *player = (AVPlayer *)object;
     BOOL isNowPlaying = player.rate > 0;
     [self.eventListener videoPlayerDidSetPlaying:isNowPlaying];
-    // Sync internal playing state with the actual player rate.
-    // This handles cases where playback is started/stopped externally
-    // (e.g., from iOS PiP controls) without going through play/pause API.
-    // IMPORTANT: Do NOT call updatePlayingState here — the AVPlayer already
-    // reflects the correct rate. Calling play/pause on it again would cause
-    // redundant KVO notifications and an infinite play/pause loop when iOS
-    // rejects playback (e.g., backgrounded without PiP/audio background mode).
-    if (_isPlaying != isNowPlaying) {
-      _isPlaying = isNowPlaying;
-      [self onExternalPlayingStateChanged];
-    }
+    // Update subclass state (e.g., display link) based on actual player rate.
+    // Do NOT modify _isPlaying here — it reflects the Dart-intended state
+    // and is only set by playWithError:/pauseWithError:. Changing it from
+    // KVO would make transient rate drops (e.g., during PiP restore)
+    // permanent, and calling updatePlayingState would cause play/pause loops.
+    [self onExternalPlayingStateChanged];
   }
 }
 
