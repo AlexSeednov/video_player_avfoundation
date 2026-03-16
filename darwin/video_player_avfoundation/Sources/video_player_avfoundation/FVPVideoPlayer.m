@@ -299,10 +299,21 @@ NS_INLINE CGFloat radiansToDegrees(CGFloat radians) {
     [self.eventListener videoPlayerDidSetPlaying:isNowPlaying];
     // Update subclass state (e.g., display link) based on actual player rate.
     // Do NOT modify _isPlaying here — it reflects the Dart-intended state
-    // and is only set by playWithError:/pauseWithError:. Changing it from
-    // KVO would make transient rate drops (e.g., during PiP restore)
-    // permanent, and calling updatePlayingState would cause play/pause loops.
+    // and is only set by playWithError:/pauseWithError:.
     [self onExternalPlayingStateChanged];
+
+    // If the Dart-intended state is "playing" but the native player was
+    // externally paused (e.g., during PiP restore transition), re-assert
+    // the playing state after a short delay. This gives iOS time to
+    // complete any transition animation before we resume.
+    if (_isPlaying && !isNowPlaying) {
+      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)),
+                     dispatch_get_main_queue(), ^{
+                       if (self->_isPlaying && self.player.rate == 0 && !self->_disposed) {
+                         [self updatePlayingState];
+                       }
+                     });
+    }
   }
 }
 
