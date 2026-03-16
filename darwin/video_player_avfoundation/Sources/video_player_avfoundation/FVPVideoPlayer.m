@@ -69,6 +69,10 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
 @implementation FVPVideoPlayer {
   // Whether or not player and player item listeners have ever been registered.
   BOOL _listenersRegistered;
+  // Re-entrancy guard for rateContext KVO handler. Prevents infinite loops
+  // when updatePlayingState (called to resume after external pause) triggers
+  // another rate change KVO notification.
+  BOOL _handlingRateChange;
 }
 
 - (instancetype)initWithPlayerItem:(NSObject<FVPAVPlayerItem> *)item
@@ -296,24 +300,31 @@ NS_INLINE CGFloat radiansToDegrees(CGFloat radians) {
     // as it is not available in AVPlayerItem.
     AVPlayer *player = (AVPlayer *)object;
     BOOL isNowPlaying = player.rate > 0;
-    [self.eventListener videoPlayerDidSetPlaying:isNowPlaying];
-    // Update subclass state (e.g., display link) based on actual player rate.
-    // Do NOT modify _isPlaying here — it reflects the Dart-intended state
-    // and is only set by playWithError:/pauseWithError:.
+
+    // Re-entrancy guard: updatePlayingState below may trigger [_player play]
+    // which synchronously fires another KVO for rate. Skip nested handling.
+    if (_handlingRateChange) {
+      return;
+    }
+
     [self onExternalPlayingStateChanged];
 
-    // If the Dart-intended state is "playing" but the native player was
-    // externally paused (e.g., during PiP restore transition), re-assert
-    // the playing state after a short delay. This gives iOS time to
-    // complete any transition animation before we resume.
     if (_isPlaying && !isNowPlaying) {
-      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)),
-                     dispatch_get_main_queue(), ^{
-                       if (self->_isPlaying && self.player.rate == 0 && !self->_disposed) {
-                         [self updatePlayingState];
-                       }
-                     });
+      // Rate dropped while Dart-intended state is "playing" (e.g., PiP
+      // restore transition, audio session interruption). Try to resume
+      // immediately.
+      _handlingRateChange = YES;
+      [self updatePlayingState];
+      _handlingRateChange = NO;
+
+      // After the resume attempt, check the actual rate. If it's > 0, the
+      // resume succeeded — suppress the transient pause event to Dart.
+      if (self.player.rate > 0) {
+        return;
+      }
+      // Otherwise iOS rejected the play — fall through to report pause.
     }
+    [self.eventListener videoPlayerDidSetPlaying:isNowPlaying];
   }
 }
 
