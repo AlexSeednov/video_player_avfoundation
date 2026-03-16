@@ -69,10 +69,6 @@ static NSDictionary<NSString *, NSValue *> *FVPGetPlayerItemObservations(void) {
 @implementation FVPVideoPlayer {
   // Whether or not player and player item listeners have ever been registered.
   BOOL _listenersRegistered;
-  // Re-entrancy guard for rateContext KVO handler. Prevents infinite loops
-  // when updatePlayingState (called to resume after external pause) triggers
-  // another rate change KVO notification.
-  BOOL _handlingRateChange;
 }
 
 - (instancetype)initWithPlayerItem:(NSObject<FVPAVPlayerItem> *)item
@@ -300,30 +296,6 @@ NS_INLINE CGFloat radiansToDegrees(CGFloat radians) {
     // as it is not available in AVPlayerItem.
     AVPlayer *player = (AVPlayer *)object;
     BOOL isNowPlaying = player.rate > 0;
-
-    // Re-entrancy guard: updatePlayingState below may trigger [_player play]
-    // which synchronously fires another KVO for rate. Skip nested handling.
-    if (_handlingRateChange) {
-      return;
-    }
-
-    [self onExternalPlayingStateChanged];
-
-    if (_isPlaying && !isNowPlaying) {
-      // Rate dropped while Dart-intended state is "playing" (e.g., PiP
-      // restore transition, audio session interruption). Try to resume
-      // immediately.
-      _handlingRateChange = YES;
-      [self updatePlayingState];
-      _handlingRateChange = NO;
-
-      // After the resume attempt, check the actual rate. If it's > 0, the
-      // resume succeeded — suppress the transient pause event to Dart.
-      if (self.player.rate > 0) {
-        return;
-      }
-      // Otherwise iOS rejected the play — fall through to report pause.
-    }
     [self.eventListener videoPlayerDidSetPlaying:isNowPlaying];
   }
 }
@@ -345,11 +317,6 @@ NS_INLINE CGFloat radiansToDegrees(CGFloat radians) {
       }
       break;
   }
-}
-
-- (void)onExternalPlayingStateChanged {
-  // Base implementation: no-op. Subclasses (e.g., FVPTextureBasedVideoPlayer)
-  // override this to update display link state without calling play/pause.
 }
 
 - (void)updatePlayingState {

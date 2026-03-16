@@ -37,11 +37,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Updates the playing state of the video player.
 - (void)updatePlayingState;
-
-/// Called when the playing state changes due to an external event (e.g., PiP controls,
-/// iOS background restrictions) rather than a Dart API call. Subclasses override this
-/// to update internal state (e.g., display link) without calling play/pause on the AVPlayer.
-- (void)onExternalPlayingStateChanged;
 @end
 
 NS_ASSUME_NONNULL_END
