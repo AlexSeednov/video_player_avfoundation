@@ -111,14 +111,6 @@
   _displayLink.running = self.isPlaying || self.waitingForFrame;
 }
 
-- (void)onExternalPlayingStateChanged {
-  // Update display link based on actual player rate, not _isPlaying.
-  // _isPlaying reflects the Dart-intended state. The actual player rate
-  // may differ due to external changes (PiP controls, iOS background
-  // restrictions, transient drops during PiP restore transitions).
-  _displayLink.running = (self.player.rate > 0) || self.waitingForFrame;
-}
-
 - (void)seekTo:(NSInteger)position completion:(void (^)(FlutterError *_Nullable))completion {
   // Update last reported position so the time observer won't treat this
   // Dart-initiated seek as an external position change.
