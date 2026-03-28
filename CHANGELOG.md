@@ -1,3 +1,19 @@
+## 2.9.3+3 - Forked
+
+* Fixes an issue where starting playback after opening PiP while paused emitted two playback events: a correct play event followed immediately by an incorrect pause event.
+
+## 2.9.3+2 - Forked
+
+* Fixes a playback start/end loop that could occur when switching to background mode.
+
+## 2.9.3+1 - Forked
+
+* Fixes PiP behavior so the primary player correctly tracks position updates and refreshes the preview frame when returning from PiP.
+
+## 2.9.3 - Forked
+
+* Adds a `replace()` method to swap the active content without recreating the controller.
+
 ## 2.9.3
 
 * Fixes a regression where HTTP headers were ignored.
