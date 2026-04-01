@@ -1,3 +1,7 @@
+## 2.9.3+4 - Forked
+
+* Fixed unintended iOS playback pause when app is backgrounded without active PiP.
+
 ## 2.9.3+3 - Forked
 
 * Fixes an issue where starting playback after opening PiP while paused emitted two playback events: a correct play event followed immediately by an incorrect pause event.
