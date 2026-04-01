@@ -80,6 +80,23 @@
                                 usingBlock:^(CMTime time) {
                                   [weakSelf handleTimeObserverUpdate:time];
                                 }];
+
+#if TARGET_OS_IOS
+    // Observe app lifecycle to detach the hidden AVPlayerLayer when the app
+    // enters background.  iOS pauses any AVPlayer that has an AVPlayerLayer
+    // in the view hierarchy when the app is backgrounded.  The layer is only
+    // needed for the texture rendering pipeline (iOS 16 workaround), which
+    // is inactive in the background, so detaching it is safe and allows
+    // background audio playback to continue.
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(applicationDidEnterBackground:)
+                                                 name:UIApplicationDidEnterBackgroundNotification
+                                               object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(applicationWillEnterForeground:)
+                                                 name:UIApplicationWillEnterForegroundNotification
+                                               object:nil];
+#endif
   }
   return self;
 }
@@ -168,12 +185,38 @@
     [self.player removeTimeObserver:_timeObserverToken];
     _timeObserverToken = nil;
   }
+#if TARGET_OS_IOS
+  [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                  name:UIApplicationDidEnterBackgroundNotification
+                                                object:nil];
+  [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                  name:UIApplicationWillEnterForegroundNotification
+                                                object:nil];
+#endif
   [super disposeWithError:error];
 
   [self.playerLayer removeFromSuperlayer];
 
   _displayLink = nil;
 }
+
+#pragma mark - Background playback
+
+#if TARGET_OS_IOS
+/// Detach the hidden AVPlayerLayer from the AVPlayer when entering background.
+/// This prevents iOS from pausing the AVPlayer due to the layer being in the
+/// view hierarchy while the app is not visible.
+- (void)applicationDidEnterBackground:(NSNotification *)notification {
+  self.playerLayer.player = nil;
+}
+
+/// Reattach the hidden AVPlayerLayer when returning to foreground so the
+/// texture rendering workaround (iOS 16 encrypted streams / dimension fix)
+/// is active again.
+- (void)applicationWillEnterForeground:(NSNotification *)notification {
+  self.playerLayer.player = self.player;
+}
+#endif
 
 #pragma mark - FlutterTexture
 
